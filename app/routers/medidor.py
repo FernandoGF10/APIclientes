@@ -62,9 +62,9 @@ def actualizar_medidor(id_medidor: int, data: MedidorUpdate, db: Session = Depen
 def eliminar_medidor(id_medidor: int, db: Session = Depends(get_db)):
     medidor = db.query(Medidor).filter(Medidor.id_medidor == id_medidor).first()
     if not medidor:
-        raise HTTPException(404, "Medidor no encontrado")
+        raise HTTPException(status_code=404, detail="Medidor no encontrado")
 
-    medidor.estado = False
+    db.delete(medidor)  # Esto elimina el registro físicamente
     db.commit()
     return {"message": "Medidor eliminado correctamente"}
 
@@ -75,6 +75,6 @@ def cambiar_estado_medidor(id_medidor: int, db: Session = Depends(get_db)):
     if not medidor:
         raise HTTPException(404, "Medidor no encontrado")
 
-    medidor.estado = not medidor.estado  # cambia de True a False o viceversa
+    medidor.estado = not medidor.estado
     db.commit()
     return {"message": f"Estado cambiado a {'Activo' if medidor.estado else 'Inactivo'}"}
