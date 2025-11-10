@@ -1,3 +1,7 @@
+import os
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from fastapi.responses import FileResponse
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -91,3 +95,51 @@ def listar_boletas(id_cliente: int | None = None, anio: int | None = None, mes: 
     if mes:
         query = query.filter(Boleta.mes == mes)
     return query.order_by(Boleta.created_at.desc()).all()
+
+
+# 📄 Generar PDF
+@router.get("/{id_boleta}/pdf")
+def generar_pdf_boleta(id_boleta: int, db: Session = Depends(get_db)):
+    boleta = db.query(Boleta).filter(Boleta.id_boleta == id_boleta).first()
+    if not boleta:
+        raise HTTPException(404, "Boleta no encontrada")
+
+    cliente = db.query(Cliente).filter(Cliente.id_cliente == boleta.id_cliente).first()
+    if not cliente:
+        raise HTTPException(404, "Cliente asociado no encontrado")
+
+    # 📂 Ruta temporal
+    filename = f"boleta_{id_boleta}.pdf"
+    filepath = os.path.join("pdfs", filename)
+    os.makedirs("pdfs", exist_ok=True)
+
+    # ✏️ Crear PDF
+    c = canvas.Canvas(filepath, pagesize=letter)
+    width, height = letter
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(200, 750, "Boleta de Electricidad")
+
+    c.setFont("Helvetica", 12)
+    c.drawString(50, 710, f"Cliente: {cliente.nombre_razon}")
+    c.drawString(50, 690, f"RUT: {cliente.rut}")
+    c.drawString(50, 670, f"Dirección: {cliente.direccion_facturacion}")
+    c.drawString(50, 650, f"Año: {boleta.anio} - Mes: {boleta.mes}")
+
+    c.line(50, 640, 560, 640)
+
+    c.drawString(50, 620, f"kWh Consumidos: {boleta.kwh_total}")
+    c.drawString(50, 600, f"Tarifa Base: ${boleta.tarifa_base}")
+    c.drawString(50, 580, f"Cargos: ${boleta.cargos}")
+    c.drawString(50, 560, f"IVA: ${boleta.iva}")
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, 540, f"TOTAL A PAGAR: ${boleta.total_pagar}")
+
+    c.setFont("Helvetica", 10)
+    c.drawString(50, 500, f"Emitida el: {boleta.created_at.strftime('%d/%m/%Y %H:%M:%S')}")
+    c.drawString(50, 480, f"Estado: {boleta.estado}")
+
+    c.showPage()
+    c.save()
+
+    return FileResponse(filepath, media_type="application/pdf", filename=filename)
